@@ -1,0 +1,213 @@
+#version: "3.9"
+#
+#services:
+#  db:
+#    image: mysql:8
+#    restart: always
+#    environment:
+#      MYSQL_DATABASE: test_db
+#      MYSQL_PASSWORD: Barcelonapanda4
+#      MYSQL_ROOT_PASSWORD: Barcelonapanda4
+#      CELERY_BROKER_URL: redis://redis:6379/0
+#    ports:
+#      - "3306:3306"
+#    volumes:
+#      - mysql-data:/var/lib/mysql
+#
+#  redis:
+#    image: redis:7-alpine
+#    restart: always
+#    ports:
+#      - "6379:6379"
+#
+#  web:
+#    build: .
+#    command: gunicorn monitoring_project.wsgi:application --bind 0.0.0.0:8000
+#    volumes:
+#      - .:/app
+#    ports:
+#      - "8000:8000"
+#    depends_on:
+#      - db
+#      - redis
+#
+#  celery-worker:
+#    user: "1000:1000"
+#    build: .
+#    command: celery -A monitoring_project worker -l info
+#    volumes:
+#      - .:/app
+#    depends_on:
+#      - db
+#      - redis
+#
+#  celery-beat:
+#    build: .
+#    command: celery -A monitoring_project beat -l info
+#    volumes:
+#      - .:/app
+#    depends_on:
+#      - db
+#      - redis
+#
+#volumes:
+#  mysql-data:
+
+
+
+#version: "3.9"
+#
+#services:
+#  db:
+#    image: mysql:8
+#    restart: always
+#    environment:
+#      MYSQL_DATABASE: test_db
+#      MYSQL_USER: user  # Добавьте это
+#      MYSQL_PASSWORD: Barcelonapanda4
+#      MYSQL_ROOT_PASSWORD: Barcelonapanda4
+#      # Удалите CELERY_BROKER_URL отсюда - это не нужно для MySQL
+#    ports:
+#      - "3306:3306"
+#    volumes:
+#      - mysql-data:/var/lib/mysql
+#    healthcheck:  # Добавьте healthcheck
+#      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#      interval: 5s
+#      timeout: 2s
+#      retries: 3
+#
+#  redis:
+#    image: redis:7-alpine
+#    restart: always
+#    ports:
+#      - "6379:6379"
+#    healthcheck:  # Добавьте healthcheck
+#      test: ["CMD", "redis-cli", "ping"]
+#      interval: 5s
+#      timeout: 2s
+#      retries: 3
+#
+#  web:
+#    build: .
+#    command: gunicorn monitoring_project.wsgi:application --bind 0.0.0.0:8000
+#    volumes:
+#      - .:/app
+#    ports:
+#      - "8000:8000"
+#    environment:  # Добавьте environment
+#      CELERY_BROKER_URL: redis://redis:6379/0
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#
+#  celery-worker:
+#    user: "1000:1000"
+#    build: .
+#    # command: celery -A monitoring_project worker -l info
+#    command: celery -A monitoring_project worker --loglevel=info --pool=solo
+#    volumes:
+#      - .:/app
+#    environment:  # Добавьте environment
+#      CELERY_BROKER_URL: redis://redis:6379/0
+#    depends_on:
+#      redis:
+#        condition: service_healthy
+#
+#  celery-beat:
+#    build: .
+#    command: celery -A monitoring_project beat -l info
+#    volumes:
+#      - .:/app
+#    environment:  # Добавьте environment
+#      CELERY_BROKER_URL: redis://redis:6379/0
+#    depends_on:
+#      redis:
+#        condition: service_healthy
+#
+#volumes:
+#  mysql-data:
+
+
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_DATABASE: test_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: Barcelonapanda4
+      MYSQL_ROOT_PASSWORD: Barcelonapanda4
+      TZ: Europe/Moscow  # Добавьте вашу временную зону
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - /etc/timezone:/etc/timezone:ro  # Добавьте это
+      - /etc/localtime:/etc/localtime:ro  # Добавьте это
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pBarcelonapanda4"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+
+  web:
+    build: .
+    command: bash -c "sleep 10 && gunicorn monitoring_project.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build: .
+    command: >
+      sh -c "sleep 15 && 
+      celery -A monitoring_project worker -l info"
+    volumes:
+      - .:/app
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build: .
+    command: bash -c "sleep 15 && celery -A monitoring_project beat -l info"
+    volumes:
+      - .:/app
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
